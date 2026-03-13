@@ -78,15 +78,17 @@ let _messages = [];
 let _loggedIn = false;
 let _apiAvailable = false;
 
-// ---- API helpers (graceful fallback) ----
-async function apiGet(p){try{const r=await fetch(API+p);if(r.ok){_apiAvailable=true;return await r.json();}}catch(e){}return null;}
-async function apiPost(p,b){try{const r=await fetch(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.ok)return await r.json();}catch(e){}return null;}
-async function apiPut(p,b){try{const r=await fetch(API+p,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.ok)return await r.json();}catch(e){}return null;}
-async function apiDel(p){try{const r=await fetch(API+p,{method:'DELETE'});if(r.ok)return await r.json();}catch(e){}return null;}
+// ---- API helpers (graceful fallback with fast timeout) ----
+function _fetchTimeout(url,opts,ms){ms=ms||2000;return Promise.race([fetch(url,opts),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);}
+async function apiGet(p){if(_skipApi)return null;try{const r=await _fetchTimeout(API+p,{},2000);if(r.ok){_apiAvailable=true;return await r.json();}}catch(e){_skipApi=true;}return null;}
+async function apiPost(p,b){if(_skipApi)return null;try{const r=await _fetchTimeout(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)},2000);if(r.ok)return await r.json();}catch(e){}return null;}
+async function apiPut(p,b){if(_skipApi)return null;try{const r=await _fetchTimeout(API+p,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)},2000);if(r.ok)return await r.json();}catch(e){}return null;}
+async function apiDel(p){if(_skipApi)return null;try{const r=await _fetchTimeout(API+p,{method:'DELETE'},2000);if(r.ok)return await r.json();}catch(e){}return null;}
+let _skipApi=false;
 
 async function loadData(){
   const issues=await apiGet('/issues');
-  if(issues&&issues.length){_issues=issues;}else if(!issues){_issues=[...SEED_ISSUES];}
+  if(issues&&issues.length){_issues=issues;}else{_issues=[...SEED_ISSUES];}
   const leads=await apiGet('/leads'); if(leads)_leads=leads;
   const msgs=await apiGet('/messages'); if(msgs)_messages=msgs;
 }
